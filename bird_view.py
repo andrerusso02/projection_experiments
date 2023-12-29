@@ -8,13 +8,17 @@ import time
 class bird_view:
 
     def __init__(self, K, T_cam_to_work_plane, pos_start_work_plane, pos_end_work_plane, resolution=20):
-        self.K = K
-        self.T_cam_to_work_plane = T_cam_to_work_plane
-        self.resolution = resolution # 1m = <resolution> px
+        self._K = K
+        self._T_cam_to_work_plane = T_cam_to_work_plane
+        self._resolution = resolution # 1m = <resolution> px
 
-        self.pos_start_work_plane = np.array(pos_start_work_plane)
-        self.pos_end_work_plane = np.array(pos_end_work_plane)
-        
+        self._pos_start_work_plane = np.array(pos_start_work_plane)
+        self._pos_end_work_plane = np.array(pos_end_work_plane)
+
+        self._img_size_px = (self._pos_end_work_plane - self._pos_start_work_plane) * self._resolution
+        self._img_size_px = self._img_size_px.astype(np.int32)
+
+        self._H = None
         self._init_projection_parameters()
 
     
@@ -35,27 +39,55 @@ class bird_view:
         pts_img = pts_img / pts_img[2]
 
         pts_work_plane_px = pts_work_plane[:2]
-        pts_work_plane_px *= self.resolution
+        pts_work_plane_px *= self._resolution
         pts_work_plane_px = pts_work_plane_px.T
-        pts_work_plane_px -= self.pos_start_work_plane * self.resolution
+        pts_work_plane_px -= self._pos_start_work_plane * self._resolution
         pts_work_plane_px = pts_work_plane_px.astype(np.float32)
 
-        self.H = cv2.getPerspectiveTransform(pts_img[:2].T.astype(np.float32), pts_work_plane_px)
+        self._H = cv2.getPerspectiveTransform(pts_img[:2].T.astype(np.float32), pts_work_plane_px)
     
-    def project(self, img):
-        size = (self.pos_end_work_plane - self.pos_start_work_plane) * self.resolution
-        print(size)
-        return cv2.warpPerspective(img, self.H, (int(size[0]), int(size[1])))
+    def project_img_to_bird(self, img):
+        return cv2.warpPerspective(img, self._H, self._img_size_px)
     
-
+    def project_work_plane_pt_to_source_img(self, pt):
+        pt = pt - self._pos_start_work_plane
+        pt = pt * self._resolution
+        pt = np.hstack((pt, 1.))
+        pt = np.linalg.inv(self._H) @ pt
+        if pt[2] == 0:
+            return None
+        pt = pt / pt[2]
+        return pt[:2]
+    
+    def project_source_img_pt_to_work_plane(self, pt):
+        pt = np.hstack((pt, 1.))
+        pt = self._H @ pt
+        if pt[2] == 0:
+            return None
+        pt = pt / pt[2]
+        pt = pt[:2]
+        pt = pt / self._resolution
+        pt = pt + self._pos_start_work_plane
+        return pt
+    
+    def get_work_plane_pt_in_bird_img(self, pt):
+        pt = pt - self._pos_start_work_plane
+        pt = pt * self._resolution
+        return pt
+    
+    def get_bird_img_pt_in_work_plane(self, pt):
+        pt = pt / self._resolution
+        pt = pt + self._pos_start_work_plane
+        return pt
 
 
 if __name__ == '__main__':
+    # test
     img = cv2.imread('image.png')
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # plt.imshow(img, cmap='gray')
-    # plt.show()
+    plt.imshow(img, cmap='gray')
+    plt.show()
 
     K = np.array([  [1124.66943359375, 0.0, 505.781982421875],
                 [0.0, 1124.6165771484375, 387.8110046386719],
@@ -71,10 +103,22 @@ if __name__ == '__main__':
 
     time_start = time.time()
 
-    img_bird = bird_view.project(img)
+    img_bird = bird_view.project_img_to_bird(img)
 
     time_end = time.time()
     print("time: ", time_end - time_start)
+
+    pt_px_cam = bird_view.project_work_plane_pt_to_source_img(np.array([20., 50.]))
+    print(pt_px_cam)
+
+    pt_px_bird = bird_view.get_work_plane_pt_in_bird_img(np.array([-20., 5.]))
+    print(pt_px_bird)
+
+    pt_work_plane = bird_view.get_bird_img_pt_in_work_plane(np.array([800., 900.]))
+    print(pt_work_plane)
+
+    pt_work_plane = bird_view.project_source_img_pt_to_work_plane(np.array([979.47613383, 451.36251473]))
+    print(pt_work_plane)
 
     plt.imshow(img_bird, cmap='gray')
     plt.show()
