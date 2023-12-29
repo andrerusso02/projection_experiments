@@ -7,15 +7,14 @@ import time
 
 class bird_view:
 
-    def __init__(self, K, T_cam_to_ground, img_size_meters, user_offset_meters=np.array([0., 0.])):
+    def __init__(self, K, T_cam_to_ground, pos_start_area, pos_end_area):
         self.K = K
         self.T_cam_to_ground = T_cam_to_ground
-        self.img_size = img_size_meters
         self.scale = 20 # 1m = <scale> px
-        self.user_offset = user_offset_meters
 
-        print("user_offset: ", self.user_offset)
-
+        self.pos_start_area = np.array(pos_start_area)
+        self.pos_end_area = np.array(pos_end_area)
+        
         self._init_projection_parameters()
 
     
@@ -35,16 +34,16 @@ class bird_view:
         pts_img = K @ pts_cam[:3]
         pts_img = pts_img / pts_img[2]
 
-        pts_ground_viz = pts_ground[:2].copy()
-        pts_ground_viz *= self.scale
-        pts_ground_viz = pts_ground_viz.T
-        pts_ground_viz += self.user_offset * self.scale
-        pts_ground_viz = pts_ground_viz.astype(np.float32)
+        pts_ground_img = pts_ground[:2].copy()
+        pts_ground_img *= self.scale
+        pts_ground_img = pts_ground_img.T
+        pts_ground_img -= self.pos_start_area * self.scale
+        pts_ground_img = pts_ground_img.astype(np.float32)
 
-        self.H = cv2.getPerspectiveTransform(pts_img[:2].T.astype(np.float32), pts_ground_viz)
+        self.H = cv2.getPerspectiveTransform(pts_img[:2].T.astype(np.float32), pts_ground_img)
     
     def project(self, img):
-        size = self.img_size * self.scale
+        size = (self.pos_end_area - self.pos_start_area) * self.scale
         print(size)
         return cv2.warpPerspective(img, self.H, (int(size[0]), int(size[1])))
 
@@ -53,8 +52,8 @@ if __name__ == '__main__':
     img = cv2.imread('image.png')
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    plt.imshow(img, cmap='gray')
-    plt.show()
+    # plt.imshow(img, cmap='gray')
+    # plt.show()
 
     K = np.array([  [1124.66943359375, 0.0, 505.781982421875],
                 [0.0, 1124.6165771484375, 387.8110046386719],
@@ -65,11 +64,8 @@ if __name__ == '__main__':
     [ 0.0115974  ,-0.99974774  ,0.01923406  ,1.55057154],
         [ 0.          ,0.          ,0.          ,1.        ]])
     
-    img_size_meters = np.array([20., 60.])
 
-    user_offset = np.array([10., -6.])
-
-    bird_view = bird_view(K, T_cam_to_ground, img_size_meters, user_offset)
+    bird_view = bird_view(K, T_cam_to_ground, (-20, 5), (20, 50))
 
     time_start = time.time()
 
