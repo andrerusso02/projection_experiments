@@ -7,6 +7,15 @@ import time
 class BirdView:
 
     def __init__(self, K, T_cam_to_work_plane, pos_start_work_plane, pos_end_work_plane, resolution=20):
+        """
+        Initialize the BirdView object.
+
+        Parameters:
+        K (numpy.ndarray): The camera calibration matrix (3x3).
+        T_cam_to_work_plane (numpy.ndarray): The transformation matrix from camera to work plane (4x4).
+        pos_start_work_plane (tuple): The start position in the work plane (x, y) in meter.
+        pos_end_work_plane (tuple): The end position in the work plane (x, y) in meter. Must be greater than pos_start_work_plane.
+        """
         self._K = K
         self._T_cam_to_work_plane = T_cam_to_work_plane
         self._resolution = resolution # 1m = <resolution> px
@@ -46,9 +55,27 @@ class BirdView:
         self._H = cv2.getPerspectiveTransform(pts_img[:2].T.astype(np.float32), pts_work_plane_px)
     
     def project_img_to_bird(self, img):
+        """
+        Project the source image to bird's view.
+
+        Parameters:
+        img (numpy.ndarray): The source image.
+
+        Returns:
+        numpy.ndarray: The bird's view image.
+        """
         return cv2.warpPerspective(img, self._H, self._img_size_px)
     
     def project_work_plane_pt_to_source_img(self, pt):
+        """
+        Convert a point in the work plane to a point in the source image.
+
+        Parameters:
+        pt (numpy.ndarray): The point in the work plane.
+
+        Returns:
+        numpy.ndarray: The point in the source image.
+        """
         pt = pt - self._pos_start_work_plane
         pt = pt * self._resolution
         pt = np.hstack((pt, 1.))
@@ -59,6 +86,15 @@ class BirdView:
         return pt[:2]
     
     def project_source_img_pt_to_work_plane(self, pt):
+        """
+        Convert a point in the source image to a point in the work plane.
+
+        Parameters:
+        pt (numpy.ndarray): The point in the source image (x, y) in pixel.
+
+        Returns:
+        numpy.ndarray: The point in the work plane (x, y) in meter.
+        """
         pt = np.hstack((pt, 1.))
         pt = self._H @ pt
         if pt[2] == 0:
@@ -70,11 +106,29 @@ class BirdView:
         return pt
     
     def get_work_plane_pt_in_bird_img(self, pt):
+        """
+        Convert a point in the work plane to a point in the source image.
+
+        Parameters:
+        pt (numpy.ndarray): The point in the work plane (x, y) in meter.
+
+        Returns:
+        numpy.ndarray: The point in the source image (x, y) in pixel.
+        """
         pt = pt - self._pos_start_work_plane
         pt = pt * self._resolution
         return pt
     
     def get_bird_img_pt_in_work_plane(self, pt):
+        """
+        Convert a point in the bird's view image to a point in the work plane.
+
+        Parameters:
+        pt (numpy.ndarray): The point in the bird's view image (x, y) in pixel.
+
+        Returns:
+        numpy.ndarray: The point in the work plane (x, y) in meter.
+        """
         pt = pt / self._resolution
         pt = pt + self._pos_start_work_plane
         return pt
