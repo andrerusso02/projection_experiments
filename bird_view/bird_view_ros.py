@@ -1,5 +1,7 @@
-import cv2
+from bird_view import BirdView
+
 import numpy as np
+import cv2
 import matplotlib.pyplot as plt
 import time
 
@@ -8,83 +10,6 @@ from sensor_msgs.msg import CameraInfo
 import tf2_ros
 import tf2_geometry_msgs
 from geometry_msgs.msg import TransformStamped, PointStamped
-
-
-class BirdView:
-
-    def __init__(self, K, T_cam_to_work_plane, pos_start_work_plane, pos_end_work_plane, resolution=20):
-        self._K = K
-        self._T_cam_to_work_plane = T_cam_to_work_plane
-        self._resolution = resolution # 1m = <resolution> px
-
-        self._pos_start_work_plane = np.array(pos_start_work_plane)
-        self._pos_end_work_plane = np.array(pos_end_work_plane)
-
-        self._img_size_px = (self._pos_end_work_plane - self._pos_start_work_plane) * self._resolution
-        self._img_size_px = self._img_size_px.astype(np.int32)
-
-        self._H = None
-        self._init_projection_parameters()
-
-    
-    def _init_projection_parameters(self):
-
-        pts_work_plane = np.array([[0., 0., 0., 1.],
-                       [1., 0., 0., 1.],
-                       [0., 1., 0., 1.],
-                       [1., 1., 0., 1.]])
-        pts_work_plane = pts_work_plane.T
-
-        pts_cam = np.linalg.inv(self._T_cam_to_work_plane) @ pts_work_plane
-
-        pts_sensor = pts_cam[:2] / pts_cam[2]
-        pts_sensor = np.vstack((pts_sensor, np.ones((1,4))))
-
-        pts_img = K @ pts_cam[:3]
-        pts_img = pts_img / pts_img[2]
-
-        pts_work_plane_px = pts_work_plane[:2]
-        pts_work_plane_px *= self._resolution
-        pts_work_plane_px = pts_work_plane_px.T
-        pts_work_plane_px -= self._pos_start_work_plane * self._resolution
-        pts_work_plane_px = pts_work_plane_px.astype(np.float32)
-
-        self._H = cv2.getPerspectiveTransform(pts_img[:2].T.astype(np.float32), pts_work_plane_px)
-    
-    def project_img_to_bird(self, img):
-        return cv2.warpPerspective(img, self._H, self._img_size_px)
-    
-    def project_work_plane_pt_to_source_img(self, pt):
-        pt = pt - self._pos_start_work_plane
-        pt = pt * self._resolution
-        pt = np.hstack((pt, 1.))
-        pt = np.linalg.inv(self._H) @ pt
-        if pt[2] == 0:
-            return None
-        pt = pt / pt[2]
-        return pt[:2]
-    
-    def project_source_img_pt_to_work_plane(self, pt):
-        pt = np.hstack((pt, 1.))
-        pt = self._H @ pt
-        if pt[2] == 0:
-            return None
-        pt = pt / pt[2]
-        pt = pt[:2]
-        pt = pt / self._resolution
-        pt = pt + self._pos_start_work_plane
-        return pt
-    
-    def get_work_plane_pt_in_bird_img(self, pt):
-        pt = pt - self._pos_start_work_plane
-        pt = pt * self._resolution
-        return pt
-    
-    def get_bird_img_pt_in_work_plane(self, pt):
-        pt = pt / self._resolution
-        pt = pt + self._pos_start_work_plane
-        return pt
-
 
 class BirdViewRos(BirdView):
     def __init__(self, frame_work_plane, frame_camera, camera_info_topic_name, pos_start_work_plane, pos_end_work_plane, resolution=20):
@@ -142,8 +67,6 @@ class BirdViewRos(BirdView):
             self.ready = True
             rospy.loginfo("bird view init done!")
 
-        
-
 
 if __name__ == '__main__':
     # test
@@ -181,4 +104,3 @@ if __name__ == '__main__':
 
     plt.imshow(img_bird, cmap='gray')
     plt.show()
-
